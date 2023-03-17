@@ -15,10 +15,10 @@ double osm_operation_time(unsigned int iterations) {
     return -1;
   }
 
-  int a = 1, b = 2;
+  int a = 0;
   double start = gettimeofdaynano();
   for (unsigned int i = 0; i < iterations; i++) {
-    a + b;
+    a++;
   }
   return gettimeofdaynano() - start;
 }
