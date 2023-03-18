@@ -19,7 +19,7 @@ double gettimeofdaynano() {
 
 double osm_operation_time(unsigned int iterations) {
   int a = 0;
-  return OSM_TIME(a++, iterations);
+  return OSM_TIME(1 + 1, iterations);
 }
 
 void nop() {}
@@ -39,3 +39,19 @@ int main() {
   std::cout << "Syscall time: " << osm_syscall_time(1000000) << std::endl;
   return 0;
 }
+
+/**
+ * VM:
+ * Op. time: 7.736e+06
+    Fn. time: 1.712e+07
+    Syscall time: 6.85894e+08
+ * Directly:
+  Op. time: 2.34317e+06
+  Fn. time: 2.18394e+06
+  Syscall time: 3.86758e+08
+
+  container:
+  Op. time: 2.13504e+06
+Fn. time: 2.12992e+06
+Syscall time: 3.9111e+08
+*/
