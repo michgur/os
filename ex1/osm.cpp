@@ -33,8 +33,9 @@ double osm_syscall_time(unsigned int iterations) {
 }
 
 #include <iostream>
-void main() {
+int main() {
   std::cout << "Op. time: " << osm_operation_time(1000000000) << std::endl;
   std::cout << "Fn. time: " << osm_function_time(1000000000) << std::endl;
   std::cout << "Syscall time: " << osm_syscall_time(1000000000) << std::endl;
+  return 0;
 }
