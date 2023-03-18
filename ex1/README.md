@@ -8,6 +8,7 @@ Makefile -- makefile for building the project
 results.png -- graph of the results
 
 REMARKS:
+On the results graph, the empty function call execution time is similar to the addition operation, both directly on the machine & in the container, I assume it's due to some compiler optimization which removes the function call.
 
 ANSWERS:
 
