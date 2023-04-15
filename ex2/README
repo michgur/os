@@ -1,0 +1,20 @@
+michael.gur, maayan.margolin
+Michael Gur (207555178), Maayan Margolin (318986585)
+EX: 2
+
+FILES:
+
+
+REMARKS:
+
+ANSWERS:
+
+1. 
+    1. `sigsetjmp` stores the current context, including the signal mask, into a buffer. Then, `siglongjmp` can be used with the buffer to restore the context. These functions are useful for handling signals, and restoring the context afterwards.
+    2. When `sigsetjmp` gets a non-zero value as its second argument, it saves the current signal mask, which later will be restored by `siglongjmp`. If the second argument is zero, `sigsetjmp` and `siglongjmp` will not affect the signal mask.
+2.
+3.
+4.a.
+4.b.
+4.c.
+5.
