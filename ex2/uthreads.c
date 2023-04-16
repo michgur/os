@@ -1,6 +1,7 @@
 #include "uthreads.h"
 #include <setjmp.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <sys/time.h>
 
@@ -60,7 +61,10 @@ struct thread_t {
   int quantums_run;
   /** Number of remaining quantums this thread has to sleep */
   int quantums_sleep;
-  /** Priority of this thread. Running thread has priority 0 */
+  /** For blocked threads; Whether to wait for an explicit `uthread_resume`
+   * call, or to become ready when `quantums_sleep == 0` */
+  bool wait_for_resume;
+  /** Priority of this thread. Running thread has highest priority */
   int priority;
   /** Environment for `sigsetjmp`, `siglongjmp` */
   sigjmp_buf env;
@@ -74,12 +78,63 @@ struct thread_t _threads[MAX_THREAD_NUM];
 int _quantum_usecs;
 /** Total number of quantums the scheduler has run so far */
 int _quantums_total = 0;
-/** Current thread ID */
+/** Currently running thread ID */
 int _current_tid = -1;
-/** Next empty thread ID available for spawn */
+/** Next empty slot available for spawn.
+ * If no slots are available, this is set to -1 */
 int _available_tid = 0;
-/** Next priority to assign to a thread */
-int _next_priority = 0;
+
+/** Updates status and other fields of all threads,
+ * and finds the next thread to run */
+int update_and_find_next_tid() {
+  int next_tid, next_priority = -1;
+  for (int tid = 0; tid < MAX_THREAD_NUM; tid++) {
+    struct thread_t *thread = &_threads[tid];
+    switch (thread->status) {
+    case AVAILABLE:
+      // do nothing
+      break;
+    case RUNNING:
+      // count quontums and move to ready
+      thread->quantums_run++;
+      thread->status = READY;
+      // Move to the end of the priority queue
+      thread->priority = 0;
+      // continue handling as a running thread; no break
+    case READY:
+      // update priority and choose next_tid
+      if (++thread->priority > next_priority) {
+        next_priority = thread->priority;
+        next_tid = tid;
+      }
+      break;
+    case BLOCKED:
+      // update sleep duration & check if expired
+      if (--thread->quantums_sleep <= 0) {
+        if (thread->wait_for_resume) {
+          // blocked with `uthread_block` and not explicitly resumed
+          // reset sleep duration to avoid overflow
+          thread->quantums_sleep = 0;
+        } else {
+          // resume thread and move to the end of the priority queue
+          thread->status = READY;
+          thread->priority = 0;
+        }
+      }
+      break;
+    }
+  }
+  return next_tid;
+}
+
+/** Caches the currect thread and jumps to thread with ID `tid` */
+void jump_to_thread(int tid) {
+  // TODO: cache current thread with sigsetjmp
+  // set _current_tid to tid
+  _current_tid = tid;
+  _threads[_current_tid].status = RUNNING;
+  // TODO: jump to thread with siglongjmp
+}
 
 void scheduler(int sig) {
   if (_current_tid == -1) {
@@ -88,31 +143,10 @@ void scheduler(int sig) {
 
   // count quantums
   _quantums_total++;
-  _threads[_current_tid].quantums_run++;
 
-  // decide which thread to run
-  int next_tid = -1;
-  for (int tid = 0; tid < MAX_THREAD_NUM; tid++) {
-    switch (_threads[tid].status) {
-    case AVAILABLE:
-      // do nothing
-      break;
-    case READY:
-      // TODO: update priority and choose next_tid
-      break;
-    case RUNNING:
-      // do nothing ?
-      break;
-    case BLOCKED:
-      // decrement sleep counter
-      _threads[tid].quantums_sleep--;
-      if (_threads[tid].quantums_sleep == 0) {
-        // wake up thread
-        _threads[tid].status = READY;
-      }
-      break;
-    }
-  }
+  // choose next thread and jump to it
+  int next_tid = update_and_find_next_tid();
+  jump_to_thread(next_tid);
 }
 
 int uthread_init(int quantum_usecs) {
@@ -127,7 +161,6 @@ int uthread_init(int quantum_usecs) {
   _quantum_usecs = quantum_usecs;
   _current_tid = 0;
   _available_tid++;
-  _next_priority++;
   // setup timer
   struct sigaction sa = {0};
   struct itimerval timer;
@@ -156,7 +189,7 @@ int uthread_spawn(thread_entry_point entry_point) {
     return -1;
   }
 
-  struct thread_t *thread = _threads + _available_tid;
+  struct thread_t *thread = &_threads[_available_tid];
   // allocate stack
   thread->stack = malloc(STACK_SIZE); // todo check failure
   // save context via sigsetjmp
@@ -170,8 +203,8 @@ int uthread_spawn(thread_entry_point entry_point) {
   sigemptyset(&thread->env->__saved_mask);
   // set status to ready
   thread->status = READY;
-  // assign priority
-  thread->priority = _next_priority++;
+  // move to end of priority queue
+  thread->priority = 0;
   // advance available tid and return
   int tid = _available_tid;
   _available_tid = next_available_tid();
@@ -189,7 +222,7 @@ void free_all() {
 }
 
 /** Returns true if the given tid is invalid or uninitialized */
-int is_tid_invalid(int tid) {
+bool is_tid_invalid(int tid) {
   return tid < 0 || tid >= MAX_THREAD_NUM || _threads[tid].status == AVAILABLE;
 }
 
@@ -210,6 +243,8 @@ int uthread_terminate(int tid) {
   // reset variables
   _threads[tid].quantums_run = 0;
   _threads[tid].quantums_sleep = 0;
+  _threads[tid].wait_for_resume = false;
+  _threads[tid].priority = 0;
   // set status to available
   _threads[tid].status = AVAILABLE;
   if (tid < _available_tid) {
@@ -218,7 +253,7 @@ int uthread_terminate(int tid) {
 
   // if terminating thread is current thread, go to scheduler
   if (tid == _current_tid) {
-    scheduler(0);
+    scheduler(0); // TODO: reset timer instead?
   }
 
   return 0;
@@ -232,10 +267,12 @@ int uthread_block(int tid) {
 
   // set status to blocked
   _threads[tid].status = BLOCKED;
+  // don't resume until explicitly told to
+  _threads[tid].wait_for_resume = true;
 
   // if blocking thread is current thread, go to scheduler
   if (tid == _current_tid) {
-    scheduler(0);
+    scheduler(0); // TODO: reset timer instead?
   }
 
   return 0;
@@ -247,10 +284,8 @@ int uthread_resume(int tid) {
     return -1;
   }
 
-  // set status to ready
-  if (_threads[tid].status == BLOCKED) {
-    _threads[tid].status = READY;
-  }
+  // don't wait for resume; become ready when sleep duration expires
+  _threads[tid].wait_for_resume = false;
 
   return 0;
 }
@@ -260,11 +295,13 @@ int uthread_sleep(int num_quantums) {
     return -1;
   }
 
+  // set status to sleeping
+  _threads[_current_tid].status = BLOCKED;
   // set sleep_quantums
   _threads[_current_tid].quantums_sleep = num_quantums;
 
-  // block current thread and go to scheduler (happens in uthread_block)
-  uthread_block(_current_tid);
+  // go to scheduler
+  scheduler(0); // TODO: reset timer instead?
   return 0;
 }
 
