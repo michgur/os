@@ -75,33 +75,32 @@ void free_all();
   fprintf(stderr, "thread library error: %s (function %s)\n", text, __func__); \
   return FAILURE
 
-#define SIGMASK_BLOCK \
-  if (sigprocmask(SIG_BLOCK, &masked_set, NULL) == FAILURE) {\
-    ERROR_MSG_SYSTEM("sigprocmask blocking failed");\
+#define SIGMASK_BLOCK                                                          \
+  if (sigprocmask(SIG_BLOCK, &masked_set, NULL) == FAILURE) {                  \
+    ERROR_MSG_SYSTEM("sigprocmask blocking failed");                           \
   }
-#define SIGMASK_UNBLOCK \
-  if (sigprocmask(SIG_UNBLOCK, &masked_set, NULL) == FAILURE) {\
-    ERROR_MSG_SYSTEM("sigprocmask unblocking failed");\
+#define SIGMASK_UNBLOCK                                                        \
+  if (sigprocmask(SIG_UNBLOCK, &masked_set, NULL) == FAILURE) {                \
+    ERROR_MSG_SYSTEM("sigprocmask unblocking failed");                         \
   }
-
 
 /** wraps a code block with sigprocmask signal blocking/unblocking, handles
  * errors */
 #define WITH_SIGMASK_BLOCKED(ret_type, func_name, param_type, param_name)      \
   /** Declaration of underlying function */                                    \
-  static ret_type __##func_name (param_type param_name);                      \
+  static ret_type __##func_name(param_type param_name);                        \
   /** The actual function, which calls the unerlying function */               \
   ret_type func_name(param_type param_name) {                                  \
-    /** try to block signals */                  \
-    SIGMASK_BLOCK;\
+    /** try to block signals */                                                \
+    SIGMASK_BLOCK;                                                             \
     /** call the underlying function */                                        \
-    ret_type ret = __##func_name (param_name);                                \
+    ret_type ret = __##func_name(param_name);                                  \
     /** try to unblock signals, if it fails, exit with error */                \
-    SIGMASK_UNBLOCK;\
+    SIGMASK_UNBLOCK;                                                           \
     return ret;                                                                \
   }                                                                            \
   /** implementation of underlying function */                                 \
-  static ret_type __##func_name (param_type param_name) /** implementation */
+  static ret_type __##func_name(param_type param_name) /** implementation */
 
 /** Represents a thread */
 struct thread_t {
