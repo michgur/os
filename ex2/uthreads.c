@@ -63,6 +63,8 @@ enum status_t {
 /** setting thread's status macro */
 #define SET_STATUS(tid, state) threads[tid].status = state
 
+void free_all();
+
 /** system error handler macro */
 #define ERROR_MSG_SYSTEM(text)                                                 \
   fprintf(stderr, "system error: %s (function %s)\n", text, __func__);         \
@@ -73,30 +75,33 @@ enum status_t {
   fprintf(stderr, "thread library error: %s (function %s)\n", text, __func__); \
   return FAILURE
 
-#define SIGMASK_BLOCK sigprocmask(SIG_BLOCK, &masked_set, NULL)
-#define SIGMASK_UNBLOCK sigprocmask(SIG_UNBLOCK, &masked_set, NULL)
+#define SIGMASK_BLOCK \
+  if (sigprocmask(SIG_BLOCK, &masked_set, NULL) == FAILURE) {\
+    ERROR_MSG_SYSTEM("sigprocmask blocking failed");\
+  }
+#define SIGMASK_UNBLOCK \
+  if (sigprocmask(SIG_UNBLOCK, &masked_set, NULL) == FAILURE) {\
+    ERROR_MSG_SYSTEM("sigprocmask unblocking failed");\
+  }
+
 
 /** wraps a code block with sigprocmask signal blocking/unblocking, handles
  * errors */
 #define WITH_SIGMASK_BLOCKED(ret_type, func_name, param_type, param_name)      \
   /** Declaration of underlying function */                                    \
-  static ret_type __##func_name##(param_type param_name);                      \
+  static ret_type __##func_name (param_type param_name);                      \
   /** The actual function, which calls the unerlying function */               \
   ret_type func_name(param_type param_name) {                                  \
-    /** try to block signals, if it fails, exit with error */                  \
-    if (SIGMASK_BLOCK == FAILURE) {                                            \
-      ERROR_MSG_SYSTEM("sigprocmask failed");                                  \
-    }                                                                          \
+    /** try to block signals */                  \
+    SIGMASK_BLOCK;\
     /** call the underlying function */                                        \
-    ret_type ret = __##func_name##(param_name);                                \
+    ret_type ret = __##func_name (param_name);                                \
     /** try to unblock signals, if it fails, exit with error */                \
-    if (SIGMASK_UNBLOCK == FAILURE) {                                          \
-      ERROR_MSG_SYSTEM("sigprocmask failed");                                  \
-    }                                                                          \
+    SIGMASK_UNBLOCK;\
     return ret;                                                                \
   }                                                                            \
   /** implementation of underlying function */                                 \
-  static ret_type __##func_name##(param_type param_name) /** implementation */
+  static ret_type __##func_name (param_type param_name) /** implementation */
 
 /** Represents a thread */
 struct thread_t {
@@ -131,7 +136,7 @@ static int next_available_tid = 0;
 /** Timer for the scheduler */
 static struct itimerval timer;
 /** Signal mask for thread switching */
-static struct sigset_t masked_set;
+static sigset_t masked_set;
 
 /** Updates status and other fields of all threads,
  * and finds the next thread to run */
@@ -188,26 +193,27 @@ void jump_to_thread(int tid) {
   LONG_JMP(tid);
 }
 
-int start_timer(bool start_immediately) {
-  int ret = setitimer(ITIMER_VIRTUAL, &timer, NULL);
-  if (start_immediately) {
-    scheduler(0);
-  }
-  return ret;
-}
-
-WITH_SIGMASK_BLOCKED(int, scheduler, int, sig) {
+void scheduler(int sig) {
   if (running_tid == -1) {
-    return FAILURE;
+    return;
   }
 
+  SIGMASK_BLOCK;
   // count quantums
   quantums_total++;
 
   // choose next thread and jump to it
   int next_tid = update_and_find_next_tid();
   jump_to_thread(next_tid);
-  return SUCCESS;
+  SIGMASK_UNBLOCK;
+}
+
+int start_timer(bool start_immediately) {
+  int ret = setitimer(ITIMER_VIRTUAL, &timer, NULL);
+  if (start_immediately) {
+    scheduler(0);
+  }
+  return ret;
 }
 
 WITH_SIGMASK_BLOCKED(int, uthread_init, int, quantum_usecs) {

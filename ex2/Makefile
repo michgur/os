@@ -2,8 +2,8 @@ CC = gcc
 CFLAGS = -Wall -Wextra -g
 
 LIBRARY = libuthreads.a
-HEADERS = utreads.h
-SOURCES = utreads.c
+HEADERS = uthreads.h
+SOURCES = uthreads.c
 OBJECTS = $(SOURCES:.c=.o)
 
 .PHONY: all clean
