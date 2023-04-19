@@ -12,9 +12,12 @@ ANSWERS:
 1. 
     1. `sigsetjmp` stores the current context, including the signal mask, into a buffer. Then, `siglongjmp` can be used with the buffer to restore the context. These functions are useful for handling signals, and restoring the context afterwards.
     2. When `sigsetjmp` gets a non-zero value as its second argument, it saves the current signal mask, which later will be restored by `siglongjmp`. If the second argument is zero, `sigsetjmp` and `siglongjmp` will not affect the signal mask.
-2.
-3.
-4.a.
-4.b.
-4.c.
+2. One good use for user-level threads, is GUI applications, which need to simultaneously handle user input, render UI and perform logic. User-level threads enable the application to handle these tasks in parallel, without involving the kernel. Additionaly, the app can control when each task is executed, and its frequency.
+3. 
+    - Advantages- each tab is islotaed on a separate process, so it can't affect the other tabs, which:
+        - makes the browser more stable - when a tab crashes, the other ones keep running.
+        - allows the browser to better manage each tab's resources speparately.
+        - prevents malicious code from affecting other tabs.
+    - Disadvantages- the operations of opening new tabs, closing tabs, and interaction between tabs, all have a higher overhead, since they're run on separate processes.
+4. 
 5.
