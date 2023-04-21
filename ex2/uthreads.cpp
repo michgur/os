@@ -186,7 +186,8 @@ void jump_to_thread(int tid) {
   if (SET_JMP(running_tid) != 0) {
     return;
   }
-
+  
+  printf("jumping from %d to %d\n", running_tid, tid);
   threads[tid].status = RUNNING;
   running_tid = tid;
   LONG_JMP(tid);
@@ -280,6 +281,7 @@ WITH_SIGMASK_BLOCKED(int, uthread_spawn, thread_entry_point, entry_point) {
   // advance available tid and return
   int tid = next_available_tid;
   next_available_tid = get_next_available_tid();
+  printf("spawned thread %d\n", tid);
   return tid;
 }
 
@@ -291,6 +293,7 @@ void free_all() {
       free(threads[i].stack);
     }
   }
+  printf("freed everything\n");
 }
 
 /** Returns true if the given tid is invalid or uninitialized */
@@ -324,6 +327,7 @@ WITH_SIGMASK_BLOCKED(int, uthread_terminate, int, tid) {
   }
 
   // if terminating thread is current thread, reset timer and go to scheduler
+  printf("terminating thread %d\n", tid);
   if (tid == running_tid) {
     start_timer(true);
   }
@@ -343,6 +347,7 @@ WITH_SIGMASK_BLOCKED(int, uthread_block, int, tid) {
   threads[tid].wait_for_resume = true;
 
   // if blocking thread is current thread, go to scheduler
+  printf("blocking thread %d\n", tid);
   if (tid == running_tid) {
     start_timer(true);
   }
@@ -358,6 +363,7 @@ WITH_SIGMASK_BLOCKED(int, uthread_resume, int, tid) {
 
   // don't wait for resume; become ready when sleep duration expires
   threads[tid].wait_for_resume = false;
+  printf("resuming thread %d\n", tid);
 
   return SUCCESS;
 }
@@ -372,6 +378,7 @@ WITH_SIGMASK_BLOCKED(int, uthread_sleep, int, num_quantums) {
   // set sleep_quantums
   threads[running_tid].quantums_sleep = num_quantums;
   // go to scheduler
+  printf("sleeping thread %d\n", running_tid);
   start_timer(true);
   return SUCCESS;
 }

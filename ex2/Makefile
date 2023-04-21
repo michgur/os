@@ -1,20 +1,33 @@
-CC = gcc
-CFLAGS = -Wall -Wextra -g
+CC=g++
+CXX=g++
+RANLIB=ranlib
 
-LIBRARY = libuthreads.a
-HEADERS = uthreads.h
-SOURCES = uthreads.c
-OBJECTS = $(SOURCES:.c=.o)
+LIBSRC=uthreads.cpp
+LIBOBJ=$(LIBSRC:.cpp=.o)
 
-.PHONY: all clean
+INCS=-I.
+CFLAGS = -Wall -std=c++11 -g $(INCS)
+CXXFLAGS = -Wall -std=c++11 -g $(INCS)
 
-all: $(LIBRARY)
+UTHREADSLIB = libuthreads.a
+TARGETS = $(UTHREADSLIB)
 
-$(LIBRARY): $(OBJECTS)
-	ar rcs $@ $^
+TAR=tar
+TARFLAGS=-cvf
+TARNAME=ex2.tar
+TARSRCS=$(LIBSRC) Makefile README
 
-%.o: %.c $(HEADERS)
-	$(CC) $(CFLAGS) -c $< -o $@
+all: $(TARGETS)
+
+$(TARGETS): $(LIBOBJ)
+	$(AR) $(ARFLAGS) $@ $^
+	$(RANLIB) $@
 
 clean:
-	rm -f $(OBJECTS) $(LIBRARY)
+	$(RM) $(TARGETS) $(UTHREADSLIB) $(OBJ) $(LIBOBJ) *~ *core
+
+depend:
+	makedepend -- $(CFLAGS) -- $(SRC) $(LIBSRC)
+
+tar:
+	$(TAR) $(TARFLAGS) $(TARNAME) $(TARSRCS)
