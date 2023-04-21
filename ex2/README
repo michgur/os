@@ -3,9 +3,9 @@ Michael Gur (207555178), Maayan Margolin (318986585)
 EX: 2
 
 FILES:
-
-
-REMARKS:
+uthreads.cpp - the implementation of the utheads.h
+Makefile - a makefile for compiling the library
+README - this file
 
 ANSWERS:
 
