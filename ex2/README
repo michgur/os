@@ -19,5 +19,7 @@ ANSWERS:
         - allows the browser to better manage each tab's resources speparately.
         - prevents malicious code from affecting other tabs.
     - Disadvantages- the operations of opening new tabs, closing tabs, and interaction between tabs, all have a higher overhead, since they're run on separate processes.
-4. 
-5.
+4. First, when the command is being typed, hardware interrupts are being triggered by the keyboard, and the os handles them and passes them to the shell, which displays the command on screen. Then, when the command is executed, it sends a `SIGTERM` singal to the process. The process is responsible for handling the signal. The default handler for `SIGTERM` calls `exit()`.
+5. 'Real' time is the real-world elapsed time, while 'virtual' time is the CPU processing time of the specific process. Examples:
+    - An alarm clock app, that needs to ring at a specific time, should use 'real' time.
+    - A thread scheduler, that doesn't care about the actual time, but only about the distribution of CPU time between threads, should use 'virtual' time.
