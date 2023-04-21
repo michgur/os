@@ -5,3 +5,4 @@ dgcc.simg
 .vscode
 /ex*/*.a
 /ex*/*.o
+/ex*/.*
