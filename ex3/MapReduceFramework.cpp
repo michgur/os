@@ -35,7 +35,7 @@ private:
   // atomic counter for tracking stage progress
   std::atomic<int> counter;
   // atomic counters for tacking number of pairs
-  std::atomic<int> inputSize, intermediateSize;
+  std::atomic<int> inputSize, intermediateSize, outputSize;
   // barrier for sort phase
   Barrier barrier;
   // semaphore for shuffle phase
@@ -260,6 +260,8 @@ void MapReduceJob::shuffle() {
   }
   // update intermediate vectors
   intermediateVectors = result;
+  // set output size
+  outputSize = intermediateVectors.size();
   // set stage and reset counter
   stage = REDUCE_STAGE;
   counter.store(0);
@@ -303,6 +305,6 @@ stage_t MapReduceJob::getStage() { return stage; }
 
 float MapReduceJob::getStatePercentage() {
   int count = counter.load();
-  int size = ((stage == MAP_STAGE) ? inputSize : intermediateSize).load();
+  int size = ((stage == MAP_STAGE) ? inputSize : ((stage == SHUFFLE_STAGE) ? intermediateSize : outputSize)).load();
   return std::max(((float)count) / size * 100, 100);
 }
