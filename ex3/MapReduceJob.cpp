@@ -14,8 +14,8 @@ MapReduceJob::MapReduceJob(const MapReduceClient &client,
                            const InputVec &inputVec, OutputVec &outputVec,
                            int numThreads)
     : client(client), inputVec(inputVec), outputVec(outputVec),
-      numThreads(numThreads), intermediateVectors(numThreads), counter(0), barrier(numThreads)
-       {
+      numThreads(numThreads), intermediateVectors(numThreads), counter(0),
+      barrier(numThreads) {
   // set stage to map
   stage = MAP_STAGE;
   // set input size
