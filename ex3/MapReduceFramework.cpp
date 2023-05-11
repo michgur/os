@@ -6,10 +6,12 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <vector>
+#include <iostream>
+#include <algorithm>
 
 #define SAFE(x)                                                                \
   if ((x) != 0) {                                                              \
-    fprintf(stderr, "[[MapReduceFramework]] error on " #x);                    \
+    std::cerr << "[[MapReduceFramework]] error on " #x << std::endl;           \
     exit(1);                                                                   \
   }
 
@@ -152,7 +154,7 @@ void JobContext::wait() { job.join(); }
 /************** MapReduceThreadPool implementation *****/
 
 MapReduceJob::MapReduceJob(JobContext *jobContext)
-    : context(jobContext), barrier(jobContext->multiThreadLevel), counter(0) {
+    : context(jobContext), numThreads(jobContext->multiThreadLevel), counter(0), barrier(numThreads), intermediateVectors(numThreads) {
   // set stage to map
   stage = MAP_STAGE;
   // set input size
@@ -247,8 +249,8 @@ void MapReduceJob::shuffle() {
     // insert all pairs with the same key to vec
     for (int i = 0; i < numThreads; i++) {
       IntermediateVec &threadVec = intermediateVectors[i];
-      while (!threadVec.empty() && *threadVec.back().first < *key &&
-             *key < *threadVec.back().first) {
+      while (!(threadVec.empty() || *threadVec.back().first < *key ||
+             *key < *threadVec.back().first)) {
         resultVec.push_back(threadVec.back());
         threadVec.pop_back();
       }

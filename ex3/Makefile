@@ -9,7 +9,7 @@ INCS=-I.
 CFLAGS = -Wall -std=c++11 -pthread -g $(INCS)
 CXXFLAGS = -Wall -std=c++11 -pthread -g $(INCS)
 
-MAPREDUCELIB = libuthreads.a
+MAPREDUCELIB = libMapReduceFramework.a
 TARGETS = $(MAPREDUCELIB)
 
 TAR=tar
