@@ -2,7 +2,8 @@ CC=g++
 CXX=g++
 RANLIB=ranlib
 
-LIBSRC=MapReduceFramework.cpp Barrier.cpp
+LIBSRC=MapReduceFramework.cpp Barrier.cpp MapReduceFramework.cpp
+LIBHDR=Barrier.h MapReduceFramework.h
 LIBOBJ=$(LIBSRC:.cpp=.o)
 
 INCS=-I.
@@ -15,7 +16,7 @@ TARGETS = $(MAPREDUCELIB)
 TAR=tar
 TARFLAGS=-cvf
 TARNAME=ex2.tar
-TARSRCS=$(LIBSRC) Makefile README
+TARSRCS=$(LIBSRC) $(LIBHDR) README Makefile
 
 all: $(TARGETS)
 
