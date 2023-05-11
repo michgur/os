@@ -1,0 +1,12 @@
+michael.gur, maayan.margolin
+Michael Gur (207555178), Maayan Margolin (318986585)
+EX: 3
+
+FILES:
+MapReduceJob.h - a class which performs a MapReduce job
+MapReduceJob.cpp - the implementation of the MapReduceJob.h
+MapReduceFramework.cpp - the implementation of the MapReduceFramework.h, using the MapReduceJob class
+Makefile - a makefile for compiling the library
+README - this file
+Barrier.h - barrier class from demo files
+Barrier.cpp - barrier class from demo files
