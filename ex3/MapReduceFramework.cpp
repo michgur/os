@@ -12,6 +12,7 @@
 #define SAFE(x)                                                                \
   if ((x) != 0) {                                                              \
     std::cerr << "[[MapReduceFramework]] error on " #x << std::endl;           \
+    this->~MapReduceJob();                                                     \
     exit(1);                                                                   \
   }
 
@@ -175,7 +176,8 @@ MapReduceJob::MapReduceJob(JobContext *jobContext)
 MapReduceJob::~MapReduceJob() {
   // delete threads
   for (auto &pair : threadpool) {
-    SAFE(pthread_cancel(pair.first));
+    pthread_cancel(pair.first);
+    pthread_join(pair.first, nullptr);
   }
   // destroy synchronization objects
   SAFE(sem_destroy(&shuffleSem));
@@ -306,5 +308,5 @@ stage_t MapReduceJob::getStage() { return stage; }
 float MapReduceJob::getStatePercentage() {
   int count = counter.load();
   int size = ((stage == MAP_STAGE) ? inputSize : ((stage == SHUFFLE_STAGE) ? intermediateSize : outputSize)).load();
-  return std::max(((float)count) / size * 100, 100);
+  return ((float)std::min(count, size)) / size * 100;
 }
