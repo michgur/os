@@ -304,5 +304,5 @@ stage_t MapReduceJob::getStage() { return stage; }
 float MapReduceJob::getStatePercentage() {
   int count = counter.load();
   int size = ((stage == MAP_STAGE) ? inputSize : intermediateSize).load();
-  return ((float)count) / size * 100;
+  return std::max(((float)count) / size * 100, 100);
 }
