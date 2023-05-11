@@ -14,8 +14,8 @@ MapReduceJob::MapReduceJob(const MapReduceClient &client,
                            const InputVec &inputVec, OutputVec &outputVec,
                            int numThreads)
     : client(client), inputVec(inputVec), outputVec(outputVec),
-      numThreads(numThreads), counter(0), barrier(numThreads),
-      intermediateVectors(numThreads) {
+      numThreads(numThreads), intermediateVectors(numThreads), counter(0), barrier(numThreads)
+       {
   // set stage to map
   stage = MAP_STAGE;
   // set input size
@@ -83,7 +83,7 @@ void MapReduceJob::shuffle(int tid) {
 
 void MapReduceJob::reduce(int tid) {
   int index = -1;
-  while ((index = counter.fetch_add(1)) < intermediateVectors.size()) {
+  while ((index = counter.fetch_add(1)) < outputSize.load()) {
     client.reduce(&intermediateVectors[index], this);
   }
 }
