@@ -6,3 +6,4 @@ dgcc.simg
 *.a
 *.o
 /ex*/.*
+.nfs*

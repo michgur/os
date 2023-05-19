@@ -1,5 +1,6 @@
 #include "MapReduceFramework.h"
 #include "MapReduceJob.h"
+#include <iostream>
 
 JobHandle startMapReduceJob(const MapReduceClient &client,
                             const InputVec &inputVec, OutputVec &outputVec,

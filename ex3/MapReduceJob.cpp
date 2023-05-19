@@ -35,9 +35,10 @@ MapReduceJob::MapReduceJob(const MapReduceClient &client,
 
 MapReduceJob::~MapReduceJob() {
   // delete threads
-  for (auto &pair : threadpool) {
-    pthread_cancel(pair.first);
-    pthread_join(pair.first, nullptr);
+  if (!joined.load()) { 
+    for (auto &pair : threadpool) {
+      pthread_join(pair.first, nullptr);
+    }
   }
   // destroy synchronization objects
   SAFE(sem_destroy(&shuffleSem));
@@ -77,7 +78,9 @@ void MapReduceJob::shuffle(int tid) {
     // horizontal shuffle across all pairs
     shuffle();
     // wake up all threads
-    SAFE(sem_post(&shuffleSem));
+    for (int i = 0; i < numThreads - 1; i++) {
+      SAFE(sem_post(&shuffleSem));
+    }
   }
 }
 
@@ -158,6 +161,11 @@ void *MapReduceJob::startThread(void *arg) {
 }
 
 void MapReduceJob::join() {
+  if (joined.load()) {
+    return;
+  } 
+  
+  joined.store(true);
   for (auto &pair : threadpool) {
     SAFE(pthread_join(pair.first, nullptr));
   }

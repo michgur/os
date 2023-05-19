@@ -23,6 +23,8 @@ private:
 
   // stage of the job. only modified by thread 0
   stage_t stage;
+  // atomic flag for indicating if job is joined
+  std::atomic<bool> joined;
   // atomic counter for tracking stage progress
   std::atomic<int> counter;
   // atomic counters for tacking number of pairs
