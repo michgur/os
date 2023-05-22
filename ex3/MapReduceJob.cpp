@@ -160,8 +160,6 @@ void *MapReduceJob::startThread(void *arg) {
   int tid = job->nextTid.fetch_add(1);
   // store in threadpool
   job->threadpool[tid] = pthread_self();
-  std::string s = "thread " + std::to_string(tid) + " created\n";
-  std::cout << s;
   // run
   job->run(tid);
   return nullptr;
