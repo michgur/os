@@ -1,6 +1,7 @@
 #include "MapReduceJob.h"
 #include <algorithm>
 #include <iostream>
+#include <string>
 
 // safe macro for error handling of system calls
 #define SAFE(x)                                                                \
@@ -14,7 +15,7 @@ MapReduceJob::MapReduceJob(const MapReduceClient &client,
                            const InputVec &inputVec, OutputVec &outputVec,
                            int numThreads)
     : client(client), inputVec(inputVec), outputVec(outputVec),
-      numThreads(numThreads), intermediateVectors(numThreads), counter(0),
+      numThreads(numThreads), threadpool(numThreads), intermediateVectors(numThreads), nextTid(0), counter(0),
       barrier(numThreads) {
   // set stage to map
   stage = MAP_STAGE;
@@ -24,8 +25,6 @@ MapReduceJob::MapReduceJob(const MapReduceClient &client,
   for (int i = 0; i < numThreads; i++) {
     pthread_t thread;
     SAFE(pthread_create(&thread, nullptr, startThread, this));
-    // store thread and index in pool
-    threadpool[thread] = i;
   }
 
   // initialize synchronization objects
@@ -36,8 +35,8 @@ MapReduceJob::MapReduceJob(const MapReduceClient &client,
 MapReduceJob::~MapReduceJob() {
   // delete threads
   if (!joined.load()) { 
-    for (auto &pair : threadpool) {
-      pthread_join(pair.first, nullptr);
+    for (pthread_t& thread : threadpool) {
+      pthread_join(thread, nullptr);
     }
   }
   // destroy synchronization objects
@@ -134,7 +133,8 @@ void MapReduceJob::shuffle() {
 
 int MapReduceJob::currentTid() {
   pthread_t t = pthread_self();
-  return threadpool[t];
+  auto it = std::find(threadpool.begin(), threadpool.end(), t);
+  return it - threadpool.begin();
 }
 
 void MapReduceJob::insert2(K2 *key, V2 *value) {
@@ -156,7 +156,14 @@ void MapReduceJob::insert3(K3 *key, V3 *value) {
 
 void *MapReduceJob::startThread(void *arg) {
   MapReduceJob *job = static_cast<MapReduceJob *>(arg);
-  job->run(job->currentTid());
+  // create thread id
+  int tid = job->nextTid.fetch_add(1);
+  // store in threadpool
+  job->threadpool[tid] = pthread_self();
+  std::string s = "thread " + std::to_string(tid) + " created\n";
+  std::cout << s;
+  // run
+  job->run(tid);
   return nullptr;
 }
 
@@ -166,8 +173,8 @@ void MapReduceJob::join() {
   } 
   
   joined.store(true);
-  for (auto &pair : threadpool) {
-    SAFE(pthread_join(pair.first, nullptr));
+  for (pthread_t &thread : threadpool) {
+    SAFE(pthread_join(thread, nullptr));
   }
 }
 

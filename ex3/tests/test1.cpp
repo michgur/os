@@ -47,6 +47,8 @@ struct MRNumber : public MapReduceClient {
 
     void Reduce (const K2 *key, const IntermediateVec *vals, void *context) const
     {
+      std::string s = "reduce " + std::to_string (((Number *) key)->n) + "\n";
+      std::cout << s;
       auto k = (Number *) key;
       K3 *k3 = new Number ();
       V3 *v3 = new Number ();

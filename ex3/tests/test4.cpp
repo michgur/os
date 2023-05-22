@@ -155,7 +155,6 @@ void findWordFrequencies (std::ifstream &ifs, std::ofstream &ofs)
   waitForJob (job);
   closeJobHandle (job);
   writeByFrequency (frequencies, ofs);
-
 }
 
 int main (int argc, char *argv[])

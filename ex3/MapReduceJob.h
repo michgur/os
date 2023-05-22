@@ -13,8 +13,8 @@ private:
   OutputVec &outputVec;
   // number of threads
   int numThreads;
-  // map pthread ID to tid (index in pool)
-  std::map<pthread_t, int> threadpool;
+  // threads
+  std::vector<pthread_t> threadpool;
   // intermediate vectors creates, in the map phase and rearranged in the
   // shuffle phase
   std::vector<IntermediateVec> intermediateVectors;
@@ -25,6 +25,8 @@ private:
   stage_t stage;
   // atomic flag for indicating if job is joined
   std::atomic<bool> joined;
+  // atomic counter for creating thread IDs
+  std::atomic<int> nextTid;
   // atomic counter for tracking stage progress
   std::atomic<int> counter;
   // atomic counters for tacking number of pairs
