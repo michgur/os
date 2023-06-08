@@ -1,0 +1,8 @@
+michael.gur, maayan.margolin
+Michael Gur (207555178), Maayan Margolin (318986585)
+EX: 4
+
+FILES:
+VirtualMemory.cpp implementation of VirtualMemory.h
+README this file
+Makefile makefile for the program
