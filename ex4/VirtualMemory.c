@@ -11,9 +11,6 @@
 #define FRAME_INDEX(addr) (addr >> OFFSET_WIDTH)
 #define FRAME_ADDR(index) (index << OFFSET_WIDTH)
 
-typedef  uint64_t frame_index_t;
-typedef  uint64_t frame_addr_t;
-
 int dec_to_bin(int n) {
   int bin = 0;
   int rem, i = 1;
@@ -26,9 +23,16 @@ int dec_to_bin(int n) {
   return bin;
 }
 
-void clear_frame(frame_index_t index) {
-  printf("clear_frame: %llu\n", index);
-  frame_addr_t addr = FRAME_ADDR(index);
+// Stores a frame and the address of its pointer in physical memory
+typedef struct {
+  // frame index
+  uint64_t index;
+  // address in physical memory of pointer to frame
+  uint64_t addr;
+} frame_ptr_t;
+
+void clear_frame(uint64_t index) {
+  uint64_t addr = FRAME_ADDR(index);
   for (int i = 0; i < PAGE_SIZE; i++) {
     PMwrite(addr + i, 0);
   }
@@ -36,11 +40,15 @@ void clear_frame(frame_index_t index) {
 
 void VMinitialize() { clear_frame(0); }
 
-int translate(uint64_t *addr, frame_index_t page, int level);
+/**
+ * Translate virtual address to physical address
+ * @param addr address to translate
+ * @return 1 on success, 0 on failure
+ */
+int translate(uint64_t *addr);
 
 int VMread(uint64_t addr, word_t *value) {
-  printf("VMread: %llu\n", addr);
-  if (addr >= VIRTUAL_MEMORY_SIZE || translate(&addr, FRAME_INDEX(addr), 0) == FAIL_STATUS) {
+  if (addr >= VIRTUAL_MEMORY_SIZE || translate(&addr) == FAIL_STATUS) {
     return FAIL_STATUS;
   }
   // read the value from the physical memory
@@ -49,8 +57,7 @@ int VMread(uint64_t addr, word_t *value) {
 }
 
 int VMwrite(uint64_t addr, word_t value) {
-  printf("VMwrite: %llu\n", addr);
-  if (addr >= VIRTUAL_MEMORY_SIZE || translate(&addr, FRAME_INDEX(addr), 0) == FAIL_STATUS) {
+  if (addr >= VIRTUAL_MEMORY_SIZE || translate(&addr) == FAIL_STATUS) {
     return FAIL_STATUS;
   }
   // write the value to the physical memory
@@ -58,156 +65,170 @@ int VMwrite(uint64_t addr, word_t value) {
   return SUCCES_STATUS;
 }
 
-
-int get_child(uint64_t node_addr, int child_offset, uint64_t* child_addr) {
-    word_t value;
-    PMread(node_addr + child_offset, &value);
-    *child_addr = FRAME_ADDR(value);
-    return value != 0 ? SUCCES_STATUS : FAIL_STATUS;
+uint64_t get_child(uint64_t node, int index) {
+  word_t child;
+  PMread(FRAME_ADDR(node) + index, &child);
+  return child;
 }
 
-int set_child(uint64_t node_addr, int child_offset, uint64_t child_addr) {
-    word_t value;
-    PMread(node_addr + child_offset, &value);
-    value = FRAME_INDEX(child_addr);
-    PMwrite(node_addr + child_offset, value);
-    return SUCCES_STATUS;
+frame_ptr_t get_child_ptr(frame_ptr_t node, int index) {
+  frame_ptr_t child = {0, FRAME_ADDR(node.index) + index};
+  PMread(child.addr, (word_t *)&child.index);
+  return child;
 }
 
+void set_child(uint64_t node, int index, uint64_t child) {
+  PMwrite(FRAME_ADDR(node) + index, child);
+}
 
 typedef struct {
-  // index of page to insert
-  frame_index_t page;
-  // max cyclic distance from the new page
+  // index of page to restore
+  uint64_t page;
+  // index of parent node
+  uint64_t parent;
+  // priority 1: unused table map frame (must not be the parent)
+  frame_ptr_t unused_frame;
+  // priority 2: frame with the max index
+  frame_ptr_t max_index_frame;
+  // priority 3: frame containing page with the max cyclic distance from page
+  frame_ptr_t max_dist_frame;
+  // page stored in max_dist_frame
+  uint64_t max_dist_page;
+  // max cyclic distance from page
   uint64_t max_dist;
-  // frame with the max cyclic distance
-  frame_index_t max_dist_frame;
-  // frame with the max index
-  frame_index_t max_index_frame;
-
 } dfs_context_t;
 
-void update_context(dfs_context_t *context, frame_index_t frame_index, int level) {
-  // update max index frame
-  if (frame_index > context->max_index_frame) {
-    context->max_index_frame = frame_index;
+/**
+ * Executed for each node in the dfs. Finds:
+ * 1. an unused table map frame if exists
+ * 2. the frame with the max index
+ * 3. the frame containing a page with the max cyclic distance from context.page
+ * @param context the dfs context
+ * @param node the current node
+ * @param level the current level in the dfs
+ * @param is_empty true if node has no children (when node is not a leaf)
+ * @param page the page in node (when node is a leaf)
+ * @return 1 if found an unused table map, 0 otherwise
+ */
+int update_context(dfs_context_t *context, frame_ptr_t node, int level,
+                   bool is_empty, uint64_t page) {
+  bool is_leaf = level >= TABLES_DEPTH;
+  // 1. update unused frame
+  if (!is_leaf && is_empty && node.index != 0 &&
+      node.index != context->parent) {
+    // return the current frame
+    context->unused_frame = node;
+    return SUCCES_STATUS;
   }
-  // update max distance page
-  // min{NUM_PAGES - |page_swapped_in - p|,|page_swapped_in - p|}
-  if (level == TABLES_DEPTH) {
-    int dist = abs((int)(context->page - frame_index));
+  // 2. update max index frame
+  if (node.index > context->max_index_frame.index) {
+    context->max_index_frame = node;
+  }
+  // 3. update max distance page (and corresponding frame)
+  if (is_leaf) {
+    int dist = abs((int)(context->page - page));
     dist = dist < NUM_PAGES - dist ? dist : NUM_PAGES - dist;
 
-    if (dist < context->max_dist) {
+    if (dist > context->max_dist) {
       context->max_dist = dist;
-      context->max_dist_frame = frame_index;
+      context->max_dist_frame = node;
+      context->max_dist_page = page;
     }
   }
+
+  return FAIL_STATUS;
 }
 
 /**
  * Selects a frame to evict and insert the new page into.
- * Finds a table frame that consists of only 0s, or the first available frame,
- * or selects the frame with max cyclic dist if all frame are used.
- * @param addr the address to start the search from (should be a page address
- * with offset 0)
- * @param max_addr max physical address used for a frame
+ * @param context context of the dfs
+ * @param node the current node
  * @param level the current level of search
- * @return 1 on success (result is in addr), 0 on failure (max_addr can be used)
+ * @param virtual_addr the virtual address of the current node
+ * @return 1 if found an unused table map, 0 otherwise (use max_index_frame or
+ * max_dist_frame)
  */
-int dfs(dfs_context_t *context, uint64_t node_index, int level, uint64_t *result) {
-  // reached the last level of the page table
-  if (level == TABLES_DEPTH) {
-    // frame is not a page table frame
-    return FAIL_STATUS;
-  }
-  update_context(context, node_index, level);
-  // if page consists of only 0s, return the current frame
+int dfs(dfs_context_t *context, frame_ptr_t node, int level,
+        uint64_t virtual_addr) {
   bool is_empty = true;
-  uint64_t child_addr, addr = FRAME_ADDR(node_index);
-  for (int i = 0; i < PAGE_SIZE; i++) {
-    if (get_child(addr, i, &child_addr) == SUCCES_STATUS) {
-      is_empty = false;
-      // search corresponding child
-      if (dfs(context, child_addr, level + 1, result) != FAIL_STATUS) {
-        return SUCCES_STATUS;
+  if (level < TABLES_DEPTH) {
+    virtual_addr <<= OFFSET_WIDTH;
+    // visit each existing child
+    for (int i = 0; i < PAGE_SIZE; i++) {
+      frame_ptr_t child = get_child_ptr(node, i);
+      if (child.index != 0) {
+        is_empty = false;
+        // search corresponding child
+        if (dfs(context, child, level + 1, virtual_addr + i) != FAIL_STATUS) {
+          return SUCCES_STATUS;
+        }
       }
     }
   }
-  if (is_empty && addr != 0) {
-    // return the current frame
-    *result = addr;
-    return SUCCES_STATUS;
-  }
-  return FAIL_STATUS;
+  return update_context(context, node, level, is_empty, virtual_addr);
 }
 
-int page_fault(uint64_t parent_addr, frame_index_t page_index, frame_addr_t *result_addr) {
-  dfs_context_t context = {page_index, 0, 0, 0};
+uint64_t page_fault(uint64_t parent_node, int index_in_parent, uint64_t page,
+                    int level) {
+  dfs_context_t context = {page, parent_node, 0, 0, 0, 0};
   bool remove_from_parent = true;
 
-  if (dfs(&context, 0, 0, result_addr) == FAIL_STATUS || true) {
-    // use max frame or max dist frame
-    if (context.max_index_frame + 1 < NUM_FRAMES) {
-      *result_addr = context.max_index_frame + 1;
-      remove_from_parent = false;
-    } else {
-      *result_addr = context.max_dist_frame;
-    }
+  frame_ptr_t frame = {0, 0};
+
+  if (dfs(&context, frame, 0, 0) == SUCCES_STATUS) {
+    // found an unused table map frame
+    frame = context.unused_frame;
+  } else if (context.max_index_frame.index + 1 < NUM_FRAMES) {
+    frame = context.max_index_frame;
+    frame.index++;
+    remove_from_parent = false;
+  } else {
+    frame = context.max_dist_frame;
+    // evict the page in the frame
+    PMevict(frame.index, context.max_dist_page);
   }
 
-  if (*result_addr == 0) {
-    return FAIL_STATUS;
-  }
-
-  // remove from parent
+  // remove from old parent
   if (remove_from_parent) {
-    // TODO: remove from parent
-    // PMevict(*addr);
+    PMwrite(frame.addr, 0);
   }
-  // fill with 0s (if next layer is table)
-  clear_frame(*result_addr);
-  // TODO write to parent table row
-  PMwrite(parent_addr, FRAME_INDEX(*result_addr));
-  
+  if (level + 1 < TABLES_DEPTH) {
+    // if next level is a table map, clear the frame
+    clear_frame(frame.index);
+  } else {
+    // otherwise, restore the page
+    PMrestore(frame.index, page);
+  }
+  // write to new parent
+  set_child(parent_node, index_in_parent, frame.index);
   // return the address of the new frame
-  return SUCCES_STATUS;
+  return frame.index;
 }
 
-/**
- * Translates a virtual address to a physical address.
- * @param addr the virtual address to translate
- * @param level the current level of the translation
- * @return 1 on success, 0 on failure
- */
-int translate(uint64_t *addr, frame_index_t page, int level) {
-  printf("translate: addr=%lu, level=%d\n", dec_to_bin(*addr), level);
+uint64_t find_frame(uint64_t page, uint64_t virtual_addr, uint64_t node,
+                    int level) {
+  // print node and level
   if (level == TABLES_DEPTH) {
-    // we reached the last level, return the address
-    return SUCCES_STATUS;
+    return node;
   }
-  // number of bits we need to get to this level
-  // (i.e. page offset in previous + current level)
-  int address_bits = (level + 1) * OFFSET_WIDTH;
-  // offset of the next levels
-  int next_offset = *addr & ((1 << address_bits) - 1);
 
-  // SHR to get the relevant page address and offset bits
-  *addr >>= address_bits;
-  // keep the rightmost bits
-  int level_offset = *addr & ~OFFSET_MASK;
-  // translate the offset via physical memory lookup
-  PMread(*addr, (word_t *)addr);
-  // add back the level offset
-  *addr |= level_offset;
-  // check that addr != 0
-  if ((*addr & OFFSET_MASK) == 0) {
-    page_fault(*addr, page, addr);
+  // bit index of where the current level offset starts
+  uint64_t bit_index = (level + 1) * OFFSET_WIDTH;
+  uint64_t offset =
+      (virtual_addr >> (VIRTUAL_ADDRESS_WIDTH - bit_index)) & OFFSET_MASK;
+
+  uint64_t child = get_child(node, offset);
+  if (child == 0) {
+    // page fault
+    child = page_fault(node, offset, page, level);
   }
-  // SHL back to the original position
-  *addr <<= address_bits;
-  // add the offset of the next levels
-  *addr |= next_offset;
-  // translate next levels
-  return translate(addr, page, level + 1);
+
+  return find_frame(page, virtual_addr, child, level + 1);
+}
+
+int translate(uint64_t *addr) {
+  uint64_t offset = *addr & OFFSET_MASK;
+  uint64_t page = *addr >> OFFSET_WIDTH;
+  *addr = FRAME_ADDR(find_frame(page, *addr, 0, 0)) + offset;
+  return (*addr == offset) ? FAIL_STATUS : SUCCES_STATUS;
 }
