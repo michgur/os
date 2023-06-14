@@ -22,19 +22,23 @@ void VMinitialize() { clear_frame(0); }
 int translate(uint64_t *addr, int level);
 
 int VMread(uint64_t addr, word_t *value) {
+  printf("VMread: %llu\n", addr);
   if (addr >= VIRTUAL_MEMORY_SIZE || translate(&addr, 0) == FAIL_STATUS) {
     return FAIL_STATUS;
   }
+  printf("PMread: %llu\n", addr);
   // read the value from the physical memory
   PMread(addr, value);
   return SUCCES_STATUS;
 }
 
 int VMwrite(uint64_t addr, word_t value) {
+  printf("VMwrite: %llu\n", addr);
   if (addr >= VIRTUAL_MEMORY_SIZE || translate(&addr, 0) == FAIL_STATUS) {
     return FAIL_STATUS;
   }
   // write the value to the physical memory
+  printf("PMwrite: %llu\n", addr);
   PMwrite(addr, value);
   return SUCCES_STATUS;
 }
@@ -145,6 +149,7 @@ int page_fault(uint64_t *addr) {
  * @return 1 on success, 0 on failure
  */
 int translate(uint64_t *addr, int level) {
+  printf("translate: addr=%lu, level=%d\n", *addr, level);
   if (level == TABLES_DEPTH) {
     // we reached the last level, return the address
     return SUCCES_STATUS;
