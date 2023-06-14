@@ -11,7 +11,24 @@
 #define FRAME_INDEX(addr) (addr >> OFFSET_WIDTH)
 #define FRAME_ADDR(index) (index << OFFSET_WIDTH)
 
-void clear_frame(uint64_t addr) {
+typedef  uint64_t frame_index_t;
+typedef  uint64_t frame_addr_t;
+
+int dec_to_bin(int n) {
+  int bin = 0;
+  int rem, i = 1;
+  while (n != 0) {
+    rem = n % 2;
+    n /= 2;
+    bin += rem * i;
+    i *= 10;
+  }
+  return bin;
+}
+
+void clear_frame(frame_index_t index) {
+  printf("clear_frame: %llu\n", index);
+  frame_addr_t addr = FRAME_ADDR(index);
   for (int i = 0; i < PAGE_SIZE; i++) {
     PMwrite(addr + i, 0);
   }
@@ -19,14 +36,13 @@ void clear_frame(uint64_t addr) {
 
 void VMinitialize() { clear_frame(0); }
 
-int translate(uint64_t *addr, int level);
+int translate(uint64_t *addr, frame_index_t page, int level);
 
 int VMread(uint64_t addr, word_t *value) {
   printf("VMread: %llu\n", addr);
-  if (addr >= VIRTUAL_MEMORY_SIZE || translate(&addr, 0) == FAIL_STATUS) {
+  if (addr >= VIRTUAL_MEMORY_SIZE || translate(&addr, FRAME_INDEX(addr), 0) == FAIL_STATUS) {
     return FAIL_STATUS;
   }
-  printf("PMread: %llu\n", addr);
   // read the value from the physical memory
   PMread(addr, value);
   return SUCCES_STATUS;
@@ -34,40 +50,58 @@ int VMread(uint64_t addr, word_t *value) {
 
 int VMwrite(uint64_t addr, word_t value) {
   printf("VMwrite: %llu\n", addr);
-  if (addr >= VIRTUAL_MEMORY_SIZE || translate(&addr, 0) == FAIL_STATUS) {
+  if (addr >= VIRTUAL_MEMORY_SIZE || translate(&addr, FRAME_INDEX(addr), 0) == FAIL_STATUS) {
     return FAIL_STATUS;
   }
   // write the value to the physical memory
-  printf("PMwrite: %llu\n", addr);
   PMwrite(addr, value);
   return SUCCES_STATUS;
 }
 
+
+int get_child(uint64_t node_addr, int child_offset, uint64_t* child_addr) {
+    word_t value;
+    PMread(node_addr + child_offset, &value);
+    *child_addr = FRAME_ADDR(value);
+    return value != 0 ? SUCCES_STATUS : FAIL_STATUS;
+}
+
+int set_child(uint64_t node_addr, int child_offset, uint64_t child_addr) {
+    word_t value;
+    PMread(node_addr + child_offset, &value);
+    value = FRAME_INDEX(child_addr);
+    PMwrite(node_addr + child_offset, value);
+    return SUCCES_STATUS;
+}
+
+
 typedef struct {
   // index of page to insert
-  uint64_t page_addr;
+  frame_index_t page;
   // max cyclic distance from the new page
   uint64_t max_dist;
   // frame with the max cyclic distance
-  uint64_t max_dist_frame_addr;
+  frame_index_t max_dist_frame;
   // frame with the max index
-  uint64_t max_index_frame_addr;
+  frame_index_t max_index_frame;
 
 } dfs_context_t;
 
-void update_context(dfs_context_t *context, uint64_t frame_addr, int level) {
+void update_context(dfs_context_t *context, frame_index_t frame_index, int level) {
   // update max index frame
-  if (frame_addr > context->max_index_frame_addr) {
-    context->max_index_frame_addr = frame_addr;
+  if (frame_index > context->max_index_frame) {
+    context->max_index_frame = frame_index;
   }
-  // update max distance frame
+  // update max distance page
   // min{NUM_PAGES - |page_swapped_in - p|,|page_swapped_in - p|}
-  int dist = abs((int)(context->page_addr - frame_addr));
-  dist = dist < VIRTUAL_MEMORY_SIZE - dist ? dist : VIRTUAL_MEMORY_SIZE - dist;
+  if (level == TABLES_DEPTH) {
+    int dist = abs((int)(context->page - frame_index));
+    dist = dist < NUM_PAGES - dist ? dist : NUM_PAGES - dist;
 
-  if (dist < context->max_dist) {
-    context->max_dist = dist;
-    context->max_dist_frame_addr = frame_addr;
+    if (dist < context->max_dist) {
+      context->max_dist = dist;
+      context->max_dist_frame = frame_index;
+    }
   }
 }
 
@@ -81,30 +115,26 @@ void update_context(dfs_context_t *context, uint64_t frame_addr, int level) {
  * @param level the current level of search
  * @return 1 on success (result is in addr), 0 on failure (max_addr can be used)
  */
-int dfs(dfs_context_t *context, uint64_t addr, int level, uint64_t *result) {
-  update_context(context, addr, level);
+int dfs(dfs_context_t *context, uint64_t node_index, int level, uint64_t *result) {
   // reached the last level of the page table
   if (level == TABLES_DEPTH) {
     // frame is not a page table frame
-    // *result = context->max_dist
     return FAIL_STATUS;
   }
+  update_context(context, node_index, level);
   // if page consists of only 0s, return the current frame
   bool is_empty = true;
-  word_t value;
+  uint64_t child_addr, addr = FRAME_ADDR(node_index);
   for (int i = 0; i < PAGE_SIZE; i++) {
-    PMread(addr + i, &value);
-    // non-zero value
-    if (value != 0) {
+    if (get_child(addr, i, &child_addr) == SUCCES_STATUS) {
       is_empty = false;
       // search corresponding child
-      uint64_t child_addr = addr | value;
       if (dfs(context, child_addr, level + 1, result) != FAIL_STATUS) {
         return SUCCES_STATUS;
       }
     }
   }
-  if (is_empty) {
+  if (is_empty && addr != 0) {
     // return the current frame
     *result = addr;
     return SUCCES_STATUS;
@@ -112,32 +142,34 @@ int dfs(dfs_context_t *context, uint64_t addr, int level, uint64_t *result) {
   return FAIL_STATUS;
 }
 
-int page_fault(uint64_t *addr) {
-  dfs_context_t context = {*addr, 0, 0, 0};
+int page_fault(uint64_t parent_addr, frame_index_t page_index, frame_addr_t *result_addr) {
+  dfs_context_t context = {page_index, 0, 0, 0};
   bool remove_from_parent = true;
 
-  if (dfs(&context, 0, 0, addr) == FAIL_STATUS) {
+  if (dfs(&context, 0, 0, result_addr) == FAIL_STATUS || true) {
     // use max frame or max dist frame
-    if (context.max_index_frame_addr + PAGE_SIZE < VIRTUAL_MEMORY_SIZE) {
-      *addr = context.max_index_frame_addr + PAGE_SIZE;
+    if (context.max_index_frame + 1 < NUM_FRAMES) {
+      *result_addr = context.max_index_frame + 1;
       remove_from_parent = false;
     } else {
-      *addr = context.max_dist_frame_addr;
+      *result_addr = context.max_dist_frame;
     }
   }
 
-  if (*addr == 0) {
+  if (*result_addr == 0) {
     return FAIL_STATUS;
   }
 
   // remove from parent
   if (remove_from_parent) {
     // TODO: remove from parent
+    // PMevict(*addr);
   }
   // fill with 0s (if next layer is table)
-  clear_frame(*addr);
-
+  clear_frame(*result_addr);
   // TODO write to parent table row
+  PMwrite(parent_addr, FRAME_INDEX(*result_addr));
+  
   // return the address of the new frame
   return SUCCES_STATUS;
 }
@@ -148,8 +180,8 @@ int page_fault(uint64_t *addr) {
  * @param level the current level of the translation
  * @return 1 on success, 0 on failure
  */
-int translate(uint64_t *addr, int level) {
-  printf("translate: addr=%lu, level=%d\n", *addr, level);
+int translate(uint64_t *addr, frame_index_t page, int level) {
+  printf("translate: addr=%lu, level=%d\n", dec_to_bin(*addr), level);
   if (level == TABLES_DEPTH) {
     // we reached the last level, return the address
     return SUCCES_STATUS;
@@ -157,13 +189,11 @@ int translate(uint64_t *addr, int level) {
   // number of bits we need to get to this level
   // (i.e. page offset in previous + current level)
   int address_bits = (level + 1) * OFFSET_WIDTH;
-  // index of address where the current offset starts
-  int bit_index = VIRTUAL_ADDRESS_WIDTH - address_bits;
   // offset of the next levels
-  int next_offset = *addr & ((1 << bit_index) - 1);
+  int next_offset = *addr & ((1 << address_bits) - 1);
 
   // SHR to get the relevant page address and offset bits
-  *addr >>= bit_index;
+  *addr >>= address_bits;
   // keep the rightmost bits
   int level_offset = *addr & ~OFFSET_MASK;
   // translate the offset via physical memory lookup
@@ -172,12 +202,12 @@ int translate(uint64_t *addr, int level) {
   *addr |= level_offset;
   // check that addr != 0
   if ((*addr & OFFSET_MASK) == 0) {
-    page_fault(addr);
+    page_fault(*addr, page, addr);
   }
   // SHL back to the original position
-  *addr <<= bit_index;
+  *addr <<= address_bits;
   // add the offset of the next levels
   *addr |= next_offset;
   // translate next levels
-  return translate(addr, level + 1);
+  return translate(addr, page, level + 1);
 }

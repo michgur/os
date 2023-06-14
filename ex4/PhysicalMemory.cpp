@@ -23,6 +23,7 @@ void PMread(uint64_t physicalAddress, word_t* value) {
     uint64_t frameIndex = physicalAddress / PAGE_SIZE;
     uint64_t frameOffset = physicalAddress % PAGE_SIZE;
     *value = RAM[frameIndex][frameOffset];
+    // printf("PMread: physicalAddress = %lu, value = %d\n", physicalAddress, *value);
  }
 
 void PMwrite(uint64_t physicalAddress, word_t value) {
@@ -35,6 +36,7 @@ void PMwrite(uint64_t physicalAddress, word_t value) {
     uint64_t frameIndex = physicalAddress / PAGE_SIZE;
     uint64_t frameOffset = physicalAddress % PAGE_SIZE;
     RAM[frameIndex][frameOffset] = value;
+    printf("PMwrite: physicalAddress = %lu, value = %d\n", physicalAddress, value);
 }
 
 void PMevict(uint64_t frameIndex, uint64_t evictedPageIndex) {
@@ -47,6 +49,7 @@ void PMevict(uint64_t frameIndex, uint64_t evictedPageIndex) {
     assert(swapFile.find(evictedPageIndex) == swapFile.end());
 
     swapFile[evictedPageIndex] = RAM[frameIndex];
+    // printf("PMevict: evictedPageIndex = %lu\n", evictedPageIndex);
 }
 
 void PMrestore(uint64_t frameIndex, uint64_t restoredPageIndex) {
@@ -65,4 +68,5 @@ void PMrestore(uint64_t frameIndex, uint64_t restoredPageIndex) {
 
     RAM[frameIndex] = std::move(swapFile[restoredPageIndex]);
     swapFile.erase(restoredPageIndex);
+    printf("PMrestore: restoredPageIndex = %lu\n", restoredPageIndex);
 }
