@@ -1,19 +1,19 @@
 #pragma once
 
-#include <climits>
+// #include <climits>
 #include <stdint.h>
 
 typedef int word_t;
 
 #define WORD_WIDTH (sizeof(word_t) * CHAR_BIT)
 
-// number of bits in the offset
-#define OFFSET_WIDTH 4
+// number of bits in the offset // 4
+#define OFFSET_WIDTH 1
 // page/frame size in words
 // in this implementation this is also the number of entries in a table
 #define PAGE_SIZE (1LL << OFFSET_WIDTH)
 
-// number of bits in a physical address
+// number of bits in a physical address // 10
 #define PHYSICAL_ADDRESS_WIDTH 10
 // RAM size in words
 #define RAM_SIZE (1LL << PHYSICAL_ADDRESS_WIDTH)
@@ -29,5 +29,7 @@ typedef int word_t;
 // number of pages in the virtual memory
 #define NUM_PAGES (VIRTUAL_MEMORY_SIZE / PAGE_SIZE)
 
-#define CEIL(VARIABLE) ( (VARIABLE - (int)VARIABLE)==0 ? (int)VARIABLE : (int)VARIABLE+1 )
-#define TABLES_DEPTH CEIL((((VIRTUAL_ADDRESS_WIDTH - OFFSET_WIDTH) / (double)OFFSET_WIDTH)))
+#define CEIL(VARIABLE)                                                         \
+  ((VARIABLE - (int)VARIABLE) == 0 ? (int)VARIABLE : (int)VARIABLE + 1)
+#define TABLES_DEPTH                                                           \
+  CEIL((((VIRTUAL_ADDRESS_WIDTH - OFFSET_WIDTH) / (double)OFFSET_WIDTH)))
