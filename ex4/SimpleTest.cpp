@@ -3,29 +3,9 @@
 
 #include <cassert>
 #include <cstdio>
-#include <iostream>
-#include <unordered_map>
-
-using PhysicalAddressToValueMap = std::unordered_map<uint64_t, word_t>;
-using namespace std;
-
-PhysicalAddressToValueMap
-readGottenPhysicalAddressToValueMap(const PhysicalAddressToValueMap &map) {
-  PhysicalAddressToValueMap gotten;
-  for (const auto &kvp : map) {
-    word_t gottenValue;
-    PMread(kvp.first, &gottenValue);
-    gotten[kvp.first] = gottenValue;
-  }
-  return gotten;
-}
 
 int main(int argc, char **argv) {
   VMinitialize();
-  // set entire physical memory to 0
-  for (uint64_t i = 0; i < RAM_SIZE; ++i) {
-    PMwrite(i, 0);
-  }
 
   // test - replicate algorithm example (works with OFFSET_WIDTH = 1,
   // PHYSICAL_ADDRESS_WIDTH = 4, VIRTUAL_ADDRESS_WIDTH = 5)
@@ -58,9 +38,10 @@ int main(int argc, char **argv) {
   // printf("success\n");
 
   // MAAYAN test
-  cout << "MAAYAN TEST" << endl;
+  fullyInitialize(InitializationMethod::ZeroMemory);
+  setLogging(true);
   uint64_t addr = 0b10001011101101110011;
-  assert(VMread(addr, nullptr) == 1);
+  ASSERT_EQ(VMwrite(addr, 1337), 1) << "write should succeed";
 
   // The offsets(for the page tables) of the above virtual address are
   // 8, 11, 11, 7, 3
@@ -78,15 +59,19 @@ int main(int argc, char **argv) {
   // physical addr 48, offset is 7, next table at frame index 3 write(67,
   // 1337) <- table at physical addr 64, offset is 3, write 1337 in this
   // address.
-  cout << "writing to " << addr << endl;
-  PhysicalAddressToValueMap exp{{8, 1}, {27, 2}, {43, 3}, {55, 4}, {67, 1337}};
 
-  auto gottenAddrToValMap = readGottenPhysicalAddressToValueMap(exp);
-  assert(exp == gottenAddrToValMap);
+  PhysicalAddressToValueMap expectedAddrToVal{
+      {8, 1}, {27, 2}, {43, 3}, {55, 4}, {67, 1337}};
+
+  auto gottenAddrToValMap =
+      readGottenPhysicalAddressToValueMap(expectedAddrToVal);
+  ASSERT_EQ(expectedAddrToVal, gottenAddrToValMap)
+      << "After doing VMwrite(addr, 1337), physical memory contents are "
+         "different than expected";
 
   word_t res;
-  assert(VMread(addr, &res) == 1);
-  assert(res == 1337);
+  ASSERT_EQ(VMread(addr, &res), 1) << "read should succeed";
+  ASSERT_EQ(res, 1337) << "wrong value was read";
 
   return 0;
 }
