@@ -35,7 +35,9 @@ int VMread(uint64_t addr, word_t *value) {
     return FAIL_STATUS;
   }
   // read the value from the physical memory
-  PMread(addr, value);
+  if (value != NULL) {
+    PMread(addr, value);
+  }
   return SUCCES_STATUS;
 }
 
