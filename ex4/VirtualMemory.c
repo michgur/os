@@ -31,13 +31,12 @@ void clear_frame(uint64_t index);
 void VMinitialize() { clear_frame(0); }
 
 int VMread(uint64_t addr, word_t *value) {
-  if (addr >= VIRTUAL_MEMORY_SIZE || translate(&addr) == FAIL_STATUS) {
+  if (addr >= VIRTUAL_MEMORY_SIZE || translate(&addr) == FAIL_STATUS ||
+      value == NULL) {
     return FAIL_STATUS;
   }
   // read the value from the physical memory
-  if (value != NULL) {
-    PMread(addr, value);
-  }
+  PMread(addr, value);
   return SUCCES_STATUS;
 }
 

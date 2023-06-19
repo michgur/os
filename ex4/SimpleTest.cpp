@@ -3,6 +3,9 @@
 
 #include <cassert>
 #include <cstdio>
+#include <unordered_map>
+
+using PhysicalAddressToValueMap = std::unordered_map<uint64_t, word_t>;
 
 int main(int argc, char **argv) {
   VMinitialize();
@@ -38,10 +41,11 @@ int main(int argc, char **argv) {
   // printf("success\n");
 
   // MAAYAN test
-  fullyInitialize(InitializationMethod::ZeroMemory);
-  setLogging(true);
+  for (int i = 0; i < RAM_SIZE; i++) {
+    PMwrite(i, 0);
+  }
   uint64_t addr = 0b10001011101101110011;
-  ASSERT_EQ(VMwrite(addr, 1337), 1) << "write should succeed";
+  assert(VMwrite(addr, 1337) == 1);
 
   // The offsets(for the page tables) of the above virtual address are
   // 8, 11, 11, 7, 3
@@ -60,18 +64,21 @@ int main(int argc, char **argv) {
   // 1337) <- table at physical addr 64, offset is 3, write 1337 in this
   // address.
 
-  PhysicalAddressToValueMap expectedAddrToVal{
+  PhysicalAddressToValueMap expected{
       {8, 1}, {27, 2}, {43, 3}, {55, 4}, {67, 1337}};
 
-  auto gottenAddrToValMap =
-      readGottenPhysicalAddressToValueMap(expectedAddrToVal);
-  ASSERT_EQ(expectedAddrToVal, gottenAddrToValMap)
-      << "After doing VMwrite(addr, 1337), physical memory contents are "
-         "different than expected";
+  PhysicalAddressToValueMap got;
+  for (const auto &kvp : expected) {
+    word_t gottenValue;
+    PMread(kvp.first, &gottenValue);
+    got[kvp.first] = gottenValue;
+  }
+
+  assert(expected == got);
 
   word_t res;
-  ASSERT_EQ(VMread(addr, &res), 1) << "read should succeed";
-  ASSERT_EQ(res, 1337) << "wrong value was read";
+  assert(VMread(addr, &res) == 1);
+  assert(res == 1337);
 
   return 0;
 }
