@@ -9,6 +9,7 @@
 #define FAIL_STATUS 0
 #define SUCCES_STATUS 1
 
+#define VIRTUAL_ADDRESS_REMAINDER VIRTUAL_ADDRESS_WIDTH % OFFSET_WIDTH
 #define OFFSET_MASK ((1 << OFFSET_WIDTH) - 1)
 #define FRAME_INDEX(addr) (addr >> OFFSET_WIDTH)
 #define FRAME_ADDR(index) (index << OFFSET_WIDTH)
@@ -230,9 +231,13 @@ uint64_t find_frame(uint64_t page, uint64_t node, int level) {
   }
 
   // bit index of where the current level offset starts
-  // we add 2 : once to skip the root and once to skip the current level
-  uint64_t bit_index = (level + 2) * OFFSET_WIDTH;
+  // we add 2 levels : one to skip the root and one to skip the current level
+  // we also subtract the remainder of dividing the virtual address by the
+  // offset width
+  uint64_t bit_index = (level + 2) * OFFSET_WIDTH - VIRTUAL_ADDRESS_REMAINDER;
   uint64_t offset = (page >> (VIRTUAL_ADDRESS_WIDTH - bit_index)) & OFFSET_MASK;
+  printf("bit index %llu\n", bit_index);
+  printf("level %d, offset %llu\n", level, offset);
 
   uint64_t child = get_child(node, offset);
   if (child == 0) {
