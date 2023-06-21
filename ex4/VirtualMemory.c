@@ -236,8 +236,6 @@ uint64_t find_frame(uint64_t page, uint64_t node, int level) {
   // offset width
   uint64_t bit_index = (level + 2) * OFFSET_WIDTH - VIRTUAL_ADDRESS_REMAINDER;
   uint64_t offset = (page >> (VIRTUAL_ADDRESS_WIDTH - bit_index)) & OFFSET_MASK;
-  printf("bit index %llu\n", bit_index);
-  printf("level %d, offset %llu\n", level, offset);
 
   uint64_t child = get_child(node, offset);
   if (child == 0) {
