@@ -247,5 +247,6 @@ int translate(uint64_t *addr) {
   uint64_t offset = *addr & OFFSET_MASK;
   uint64_t page = *addr >> OFFSET_WIDTH;
   *addr = FRAME_ADDR(find_frame(page, 0, 0)) + offset;
-  return (*addr == offset) ? FAIL_STATUS : SUCCES_STATUS;
+  // if we got frame 0 it's considered a failure, unless the depth is 0
+  return (*addr == offset && TABLES_DEPTH > 0) ? FAIL_STATUS : SUCCES_STATUS;
 }
