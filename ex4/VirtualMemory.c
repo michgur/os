@@ -225,7 +225,6 @@ uint64_t page_fault(uint64_t parent_node, int index_in_parent, uint64_t page,
  * @param node the current node
  */
 uint64_t find_frame(uint64_t page, uint64_t node, int level) {
-  // print node and level
   if (level == TABLES_DEPTH) {
     return node;
   }
