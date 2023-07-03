@@ -7,3 +7,4 @@ dgcc.simg
 *.o
 /ex*/.*
 .nfs*
+all TA*
